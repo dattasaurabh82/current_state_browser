@@ -16,10 +16,103 @@ function pastTense(summary) {
   return `It was ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}`;
 }
 
+// ── Visualiser ────────────────────────────────────────────────────────────────
+// Uses Web Audio API to draw a live frequency bar graph on the canvas.
+// AudioContext and source node are created once and reused — browsers disallow
+// calling createMediaElementSource() more than once on the same element.
+
+const Visualiser = (() => {
+  let audioCtx    = null;
+  let analyser    = null;
+  let sourceNode  = null;
+  let animFrameId = null;
+
+  const canvas    = document.getElementById('waveform');
+  const ctx       = canvas ? canvas.getContext('2d') : null;
+
+  function init(audioEl) {
+    if (!canvas || !ctx) return false;
+
+    try {
+      if (!audioCtx) {
+        audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+        analyser   = audioCtx.createAnalyser();
+        analyser.fftSize = 256; // 128 frequency bins
+        sourceNode = audioCtx.createMediaElementSource(audioEl);
+        sourceNode.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        console.log('[visualiser] AudioContext and analyser created.');
+      }
+      return true;
+    } catch (err) {
+      console.warn('[visualiser] Web Audio API init failed (CORS or browser issue):', err);
+      return false;
+    }
+  }
+
+  function draw() {
+    if (!analyser || !ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray    = new Uint8Array(bufferLength);
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const barWidth = (W / bufferLength) * 2.0;
+
+    function loop() {
+      animFrameId = requestAnimationFrame(loop);
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.clearRect(0, 0, W, H);
+
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * H;
+        ctx.fillStyle = `rgb(0, 0, 0)`;
+        ctx.fillRect(x, H - barHeight, barWidth - 1, barHeight);
+        x += barWidth;
+      }
+    }
+
+    loop();
+  }
+
+  function start(audioEl) {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    if (!init(audioEl)) {
+      console.warn('[visualiser] Skipping — init failed.');
+      return;
+    }
+    canvas.style.display = 'block';
+    console.log('[visualiser] Starting animation.');
+    draw();
+  }
+
+  function stop() {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = null;
+    }
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    console.log('[visualiser] Stopped.');
+  }
+
+  function hide() {
+    stop();
+    if (canvas) canvas.style.display = 'none';
+  }
+
+  return { start, stop, hide };
+})();
+
 // ── On load: fetch available dates, configure calendar ────────────────────────
 
 async function init() {
-  // Dynamic copyright year
   document.getElementById('footer-year').textContent = new Date().getFullYear();
 
   console.log('[init] Fetching available dates...');
@@ -29,17 +122,16 @@ async function init() {
     availableDates = new Set(data.dates);
     console.log(`[init] ${data.count} dates available:`, data.dates);
 
-    const sorted = data.dates.slice().sort();
+    const sorted   = data.dates.slice().sort();
     const earliest = sorted[0];
     const latest   = sorted[sorted.length - 1];
 
     const input = document.getElementById('date-input');
     input.min   = earliest;
     input.max   = latest;
-    input.value = latest; // default to most recent
+    input.value = latest;
 
     console.log(`[init] Calendar range: ${earliest} → ${latest}`);
-
     await loadEntry(latest);
 
   } catch (err) {
@@ -64,6 +156,9 @@ async function loadEntry(date) {
   document.getElementById('entry-section').style.display    = 'none';
   document.getElementById('no-entry-section').style.display = 'none';
   document.getElementById('date-status').textContent        = '';
+
+  // Stop and hide visualiser when switching dates
+  Visualiser.hide();
 
   if (!availableDates.has(date)) {
     console.warn(`[loadEntry] ${date} not in available set — no entry.`);
@@ -97,9 +192,16 @@ async function loadEntry(date) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     console.log(`[loadEntry] Audio URL received:`, data.url);
+
     audioPlayer.src           = data.url;
     audioPlayer.style.display = 'block';
     audioStatus.textContent   = '';
+
+    // Wire up visualiser events
+    audioPlayer.onplay  = () => Visualiser.start(audioPlayer);
+    audioPlayer.onpause = () => Visualiser.stop();
+    audioPlayer.onended = () => Visualiser.hide();
+
   } catch (err) {
     console.error(`[loadEntry] Audio fetch failed:`, err);
     audioStatus.textContent = 'Audio unavailable for this date.';
