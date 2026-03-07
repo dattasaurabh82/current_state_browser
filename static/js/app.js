@@ -15,36 +15,16 @@ function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 // ── Mood system ───────────────────────────────────────────────────────────────
-// Each archetype maps to 4 blob colours (one per blob element).
-// Colours are desaturated but PERCEPTUALLY DISTINCT from each other —
-// each archetype should be immediately recognisable as a different atmosphere.
-//
-// Rules:
-//  - Max saturation ~45% — keeps it editorial, not garish
-//  - Warm/cool contrast within palette = internal emotional tension
-//  - Hue families are meaningfully separated (>30° apart per archetype)
-//
-// setMood() sets blob backgroundColor (CSS 2.6s transition does the fade)
-// and sets --blob-a/b/c vars for the mood-banner inner echo gradient.
 
 const MOODS = {
-  // Warm stone vs cool slate — two forces pulling
   gentle_tension:    ['#c4b5a5', '#8faab8', '#d4c4a8', '#7a9aaa'],
-  // Deep blue-greys — heavy, cold, still
   deep_sorrow:       ['#607080', '#506070', '#788898', '#506878'],
-  // Soft sage + pale gold — growth without proclamation
   quiet_hope:        ['#a8bc90', '#c8c890', '#b8d0a0', '#d0c8a0'],
-  // Amber + terracotta — heat, friction, movement
   restless_energy:   ['#c8824a', '#b89060', '#d4a060', '#c07040'],
-  // Pale ice blue — surface stillness, barely holding
   fragile_calm:      ['#a8c4d0', '#c0d4dc', '#b0ccd8', '#d0dce4'],
-  // Muted violet — shared weight, mourning
   collective_grief:  ['#8878a8', '#787098', '#9888b0', '#706888'],
-  // Warm sage + cream — hope tempered, not declared
   cautious_optimism: ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
-  // Also: API sometimes returns cautious_hope — handled as alias below
   cautious_hope:     ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
-  // Warm taupe + grey — undefined, unresolved
   raw_uncertainty:   ['#b8a890', '#a89880', '#c4b8a0', '#b0a888'],
 };
 
@@ -56,18 +36,11 @@ const blobs = [
 ];
 
 function setMood(archetype) {
-  // Normalise: lowercase + underscores, strip spaces
   const key = archetype ? archetype.toLowerCase().replace(/[\s-]+/g, '_') : 'gentle_tension';
   const p   = MOODS[key] || MOODS['gentle_tension'];
-  if (!MOODS[key]) {
-    console.warn(`[mood] Unknown archetype "${archetype}", falling back to gentle_tension`);
-  }
+  if (!MOODS[key]) console.warn(`[mood] Unknown archetype "${archetype}", falling back to gentle_tension`);
   console.log(`[mood] ${key}`, p);
-
-  // Update blob colours — CSS transition: background-color 2.6s ease handles the fade
   blobs.forEach((b, i) => { if (b) b.style.backgroundColor = p[i]; });
-
-  // Update mood-banner inner echo vars
   const r = document.documentElement;
   r.style.setProperty('--blob-a', p[0]);
   r.style.setProperty('--blob-b', p[1]);
@@ -75,9 +48,6 @@ function setMood(archetype) {
 }
 
 // ── Blob animation ────────────────────────────────────────────────────────────
-// Each blob drifts independently on a sine-wave path.
-// Different speed, amplitude, phase per blob — never in sync.
-// The card's backdrop-filter blur transmits these colours through the frosted glass.
 
 const blobDefs = [
   { bx: 0.18, by: 0.28, ax: 0.12, ay: 0.10, sx: 0.00031, sy: 0.00023, ph: 0.00 },
@@ -87,10 +57,7 @@ const blobDefs = [
 ];
 
 function animateBlobs(t) {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
-  const half = W * 0.29;
-
+  const W = window.innerWidth, H = window.innerHeight, half = W * 0.29;
   blobDefs.forEach((d, i) => {
     if (!blobs[i]) return;
     const x = (d.bx + Math.sin(t * d.sx + d.ph) * d.ax) * W - half;
@@ -100,8 +67,6 @@ function animateBlobs(t) {
   requestAnimationFrame(animateBlobs);
 }
 requestAnimationFrame(animateBlobs);
-
-// Init with default palette — blobs are visible before first API response
 setMood('gentle_tension');
 
 // ── Visualiser ────────────────────────────────────────────────────────────────
@@ -125,32 +90,52 @@ const Visualiser = (() => {
         sourceNode = audioCtx.createMediaElementSource(audioEl);
         sourceNode.connect(analyser);
         analyser.connect(audioCtx.destination);
-        console.log('[visualiser] AudioContext created.');
       }
       return true;
     } catch (err) {
-      console.warn('[visualiser] Web Audio API init failed:', err);
+      console.warn('[visualiser] init failed:', err);
       return false;
     }
   }
 
   function draw() {
     if (!analyser || !ctx) return;
-    const bufLen  = analyser.frequencyBinCount;
-    const data    = new Uint8Array(bufLen);
+    const bufLen = analyser.frequencyBinCount;  // 128 bins (fftSize/2)
+    const raw    = new Uint8Array(bufLen);
     const W = canvas.width, H = canvas.height;
-    const barW = (W / bufLen) * 1.8;
+
+    // We draw bufLen bars across the full width
+    const gap  = 1.5;
+    const barW = (W - bufLen * gap) / bufLen;
 
     function loop() {
       animId = requestAnimationFrame(loop);
-      analyser.getByteFrequencyData(data);
+      analyser.getByteFrequencyData(raw);
+
+      // ── Sausage / lens envelope ───────────────────────────────
+      // Frequency data: index 0 = bass (loud), last = treble (quiet).
+      // We rearrange into a palindrome so the loud bass sits centre,
+      // quiet treble at both edges → low–high–low envelope shape.
+      //
+      // Arrangement: [raw[half]...raw[1], raw[0], raw[1]...raw[half]]
+      // Left half descends from mid-freq to bass (getting louder).
+      // Right half mirrors: bass back up to mid-freq (getting quieter).
+      // Result: a symmetric sausage/lens that peaks in the middle.
+
+      const half = Math.floor(bufLen / 2);
+      const sausage = new Uint8Array(bufLen);
+      for (let i = 0; i <= half; i++) {
+        sausage[half - i] = raw[i];  // left side: count down toward centre
+        sausage[half + i] = raw[i];  // right side: mirror
+      }
+
       ctx.clearRect(0, 0, W, H);
-      let x = 0;
       for (let i = 0; i < bufLen; i++) {
-        const barH = (data[i] / 255) * H * 0.88;
-        ctx.fillStyle = 'rgba(26,26,24,0.55)';
-        ctx.fillRect(x, (H - barH) / 2, barW - 1, barH);
-        x += barW;
+        const barH = (sausage[i] / 255) * H * 0.90;
+        const x    = i * (barW + gap);
+        const y    = (H - barH) / 2;          // centred vertically
+        ctx.fillStyle = 'rgba(26,26,24,0.50)';
+        ctx.fillRect(x, y, barW, barH);
       }
     }
     loop();
@@ -160,20 +145,15 @@ const Visualiser = (() => {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     if (!init(audioEl)) return;
     show('waveform');
-    console.log('[visualiser] Starting.');
     draw();
   }
 
   function stop() {
     if (animId) { cancelAnimationFrame(animId); animId = null; }
     if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    console.log('[visualiser] Stopped.');
   }
 
-  function hideVis() {
-    stop();
-    hide('waveform');
-  }
+  function hideVis() { stop(); hide('waveform'); }
 
   return { start, stop, hide: hideVis };
 })();
@@ -182,13 +162,10 @@ const Visualiser = (() => {
 
 async function init() {
   document.getElementById('footer-year').textContent = new Date().getFullYear();
-  console.log('[init] Fetching available dates...');
-
   try {
     const resp = await fetch(`${API}/api/dates`);
     const data = await resp.json();
     availableDates = new Set(data.dates);
-    console.log(`[init] ${data.count} dates available.`);
 
     const sorted   = data.dates.slice().sort();
     const earliest = sorted[0];
@@ -200,7 +177,6 @@ async function init() {
     input.value = latest;
 
     await loadEntry(latest);
-
   } catch (err) {
     console.error('[init] Failed to fetch dates:', err);
     document.getElementById('date-status').textContent = 'Error loading dates.';
@@ -210,15 +186,12 @@ async function init() {
 // ── Date picker ───────────────────────────────────────────────────────────────
 
 document.getElementById('date-input').addEventListener('change', async (e) => {
-  console.log(`[picker] Date selected: ${e.target.value}`);
   await loadEntry(e.target.value);
 });
 
 // ── Load entry ────────────────────────────────────────────────────────────────
 
 async function loadEntry(date) {
-  console.log(`[loadEntry] Loading: ${date}`);
-
   hide('entry-section');
   hide('no-entry-section');
   hide('meta-section');
@@ -229,7 +202,6 @@ async function loadEntry(date) {
   Visualiser.hide();
 
   if (!availableDates.has(date)) {
-    console.warn(`[loadEntry] ${date} not in available set.`);
     show('no-entry-section');
     return;
   }
@@ -238,7 +210,6 @@ async function loadEntry(date) {
     const resp = await fetch(`${API}/api/entry/${date}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const meta = await resp.json();
-    console.log('[loadEntry] Metadata received:', meta);
     renderMetadata(meta);
     show('entry-section');
     show('meta-section');
@@ -256,7 +227,6 @@ async function loadEntry(date) {
     const resp = await fetch(`${API}/api/audio/${date}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
-    console.log('[loadEntry] Audio URL received.');
 
     audioPlayer.src = data.url;
     show('audio-player');
@@ -265,7 +235,6 @@ async function loadEntry(date) {
     audioPlayer.onplay  = () => Visualiser.start(audioPlayer);
     audioPlayer.onpause = () => Visualiser.stop();
     audioPlayer.onended = () => Visualiser.hide();
-
   } catch (err) {
     console.error('[loadEntry] Audio fetch failed:', err);
     document.getElementById('audio-status').textContent = 'Audio unavailable.';
@@ -277,29 +246,20 @@ async function loadEntry(date) {
 function renderMetadata(meta) {
   document.getElementById('entry-date').textContent =
     meta.date ? meta.date.replace(/-/g, ' — ') : '';
-
   document.getElementById('entry-summary').textContent =
     pastTense(meta.summary);
-
   document.getElementById('entry-archetype').textContent =
     meta.primary_archetype || '';
-
   document.getElementById('entry-energy').textContent =
     meta.energy_level || '';
-
   document.getElementById('entry-tension').textContent =
     Math.round((meta.tension_level || 0) * 100);
-
   document.getElementById('entry-hope').textContent =
     Math.round((meta.hope_factor || 0) * 100);
-
   document.getElementById('entry-prompt').textContent =
     meta.prompt_natural || '';
-
   document.getElementById('entry-themes').textContent =
     (meta.dominant_themes || []).join(', ');
-
-  // This is the reactive call — drives the entire background atmosphere
   setMood(meta.primary_archetype);
 }
 
