@@ -1,3 +1,11 @@
-/* current_state browser — stylesheet
-   Placeholder for now. Styling pass deferred.
-*/
+/* current_state browser — stylesheet */
+
+/* ── Utilities ────────────────────────────────────────────── */
+
+.hidden {
+  display: none;
+}
+
+.full-width {
+  width: 100%;
+}

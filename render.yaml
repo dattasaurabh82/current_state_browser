@@ -1,0 +1,25 @@
+# render.yaml — Render deployment configuration for current_state_browser
+# Docs: https://render.com/docs/render-yaml-reference
+
+services:
+  - type: web
+    name: current-state-browser
+    runtime: python
+    region: frankfurt          # closest to Berlin
+    plan: free                 # change to starter for always-on
+
+    buildCommand: "pip install uv && uv sync --frozen"
+    startCommand: "uv run uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+    envVars:
+      - key: DROPBOX_CLIENT_ID
+        sync: false            # set manually in Render dashboard — never commit
+      - key: DROPBOX_CLIENT_SECRET
+        sync: false
+      - key: DROPBOX_REFRESH_TOKEN
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+
+    # Health check — Render pings this to know the service is up
+    healthCheckPath: /api/status
