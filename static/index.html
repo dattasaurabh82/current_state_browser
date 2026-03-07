@@ -4,14 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>current_state browser</title>
+  <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
-  <h1>current_state</h1>
+  <h1>current_state Browser</h1>
+
   <p>
-    An archive of AI-generated ambient music based on daily world news,
-    by <a href="https://www.dattasaurabh.com/Current-State" target="_blank" rel="noopener">Saurabh Datta</a>.
-    Source on <a href="https://github.com/dattasaurabh82/current_state" target="_blank" rel="noopener">GitHub</a>.
+    current_state browser is a slow archive. Every day,
+    <a href="https://www.dattasaurabh.com/Current-State" target="_blank" rel="noopener">Saurabh Datta's system</a>,
+    in Berlin, reads the news, feels the weight of it, and makes a piece of music.
+    Not about the headlines — from them. What you hear is what that day carried.
+    <a href="https://github.com/dattasaurabh82/current_state" target="_blank" rel="noopener">Open source</a>.
   </p>
 
   <hr>
@@ -79,127 +83,7 @@
     <p>Saurabh Datta | Berlin | &copy; <span id="footer-year"></span> — All rights reserved.</p>
   </footer>
 
-  <script>
-    // Dynamic copyright year
-    document.getElementById('footer-year').textContent = new Date().getFullYear();
-
-    const API = '';  // same origin
-
-    let availableDates = new Set();
-
-    // ── On load: fetch available dates, configure calendar ──────────────────
-    async function init() {
-      console.log('[init] Fetching available dates...');
-      try {
-        const resp = await fetch(`${API}/api/dates`);
-        const data = await resp.json();
-        availableDates = new Set(data.dates);
-        console.log(`[init] ${data.count} dates available:`, data.dates);
-
-        const sorted = data.dates.slice().sort();
-        const earliest = sorted[0];
-        const latest   = sorted[sorted.length - 1];
-
-        const input = document.getElementById('date-input');
-        input.min = earliest;
-        input.max = latest;
-        input.value = latest;  // default to most recent
-
-        console.log(`[init] Calendar range: ${earliest} → ${latest}`);
-
-        // Load the default (latest) date immediately
-        await loadEntry(latest);
-
-      } catch (err) {
-        console.error('[init] Failed to fetch dates:', err);
-        document.getElementById('date-status').textContent = 'Error loading dates.';
-      }
-    }
-
-    // ── Date picker change ───────────────────────────────────────────────────
-    document.getElementById('date-input').addEventListener('change', async (e) => {
-      const date = e.target.value;
-      console.log(`[picker] Date selected: ${date}`);
-      await loadEntry(date);
-    });
-
-    // ── Load a date entry ────────────────────────────────────────────────────
-    async function loadEntry(date) {
-      console.log(`[loadEntry] Loading: ${date}`);
-
-      // Hide both sections while loading
-      document.getElementById('entry-section').style.display = 'none';
-      document.getElementById('no-entry-section').style.display = 'none';
-      document.getElementById('date-status').textContent = '';
-
-      if (!availableDates.has(date)) {
-        console.warn(`[loadEntry] ${date} not in available set — no entry.`);
-        document.getElementById('no-entry-section').style.display = 'block';
-        return;
-      }
-
-      // ── Fetch metadata ─────────────────────────────────────────────────
-      try {
-        console.log(`[loadEntry] Fetching metadata: /api/entry/${date}`);
-        const resp = await fetch(`${API}/api/entry/${date}`);
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-        const meta = await resp.json();
-        console.log(`[loadEntry] Metadata received:`, meta);
-        renderMetadata(meta);
-      } catch (err) {
-        console.error(`[loadEntry] Metadata fetch failed:`, err);
-        document.getElementById('no-entry-section').style.display = 'block';
-        return;
-      }
-
-      // ── Fetch audio link ───────────────────────────────────────────────
-      const audioStatus  = document.getElementById('audio-status');
-      const audioPlayer  = document.getElementById('audio-player');
-      audioStatus.textContent  = 'Loading audio...';
-      audioPlayer.style.display = 'none';
-
-      try {
-        console.log(`[loadEntry] Fetching audio link: /api/audio/${date}`);
-        const resp = await fetch(`${API}/api/audio/${date}`);
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}`);
-        }
-        const data = await resp.json();
-        console.log(`[loadEntry] Audio URL received:`, data.url);
-        audioPlayer.src = data.url;
-        audioPlayer.style.display = 'block';
-        audioStatus.textContent = '';
-      } catch (err) {
-        console.error(`[loadEntry] Audio fetch failed:`, err);
-        audioStatus.textContent = 'Audio unavailable for this date.';
-      }
-
-      document.getElementById('entry-section').style.display = 'block';
-    }
-
-    // ── Render metadata fields ───────────────────────────────────────────────
-    function renderMetadata(meta) {
-      document.getElementById('entry-date').textContent      = meta.date;
-      document.getElementById('entry-summary').textContent   = meta.summary;
-      document.getElementById('entry-archetype').textContent = meta.primary_archetype;
-      document.getElementById('entry-energy').textContent    = meta.energy_level;
-      document.getElementById('entry-tension').textContent   = pct(meta.tension_level);
-      document.getElementById('entry-hope').textContent      = pct(meta.hope_factor);
-      document.getElementById('entry-prompt').textContent    = meta.prompt_natural;
-
-      const themes = (meta.dominant_themes || []).join(', ');
-      document.getElementById('entry-themes').textContent = themes;
-    }
-
-    function pct(val) {
-      return `${Math.round(val * 100)}%`;
-    }
-
-    // ── Boot ─────────────────────────────────────────────────────────────────
-    init();
-  </script>
+  <script src="/static/js/app.js"></script>
 
 </body>
 </html>
