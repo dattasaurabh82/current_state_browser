@@ -15,19 +15,37 @@ function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 // ── Mood system ───────────────────────────────────────────────────────────────
-// Each archetype maps to 4 blob colours.
-// setMood() updates blob background-colors (CSS transition handles the fade)
-// and updates the --blob-a/b/c CSS vars for the mood-banner inner echo.
+// Each archetype maps to 4 blob colours (one per blob element).
+// Colours are desaturated but PERCEPTUALLY DISTINCT from each other —
+// each archetype should be immediately recognisable as a different atmosphere.
+//
+// Rules:
+//  - Max saturation ~45% — keeps it editorial, not garish
+//  - Warm/cool contrast within palette = internal emotional tension
+//  - Hue families are meaningfully separated (>30° apart per archetype)
+//
+// setMood() sets blob backgroundColor (CSS 2.6s transition does the fade)
+// and sets --blob-a/b/c vars for the mood-banner inner echo gradient.
 
 const MOODS = {
-  gentle_tension:    ['#c9bfb4', '#a8b5c2', '#d4c8b8', '#b8bfc8'],
-  deep_sorrow:       ['#8fa0b0', '#7d8fa0', '#b0bdc8', '#8898a8'],
-  quiet_hope:        ['#c4ceaa', '#d4c8a8', '#b8cdb8', '#c8d4b0'],
-  restless_energy:   ['#c8aa8f', '#d4b898', '#d4c0a0', '#c8b090'],
-  fragile_calm:      ['#b8c4c8', '#c8d0d0', '#d0ccc4', '#c0ccd0'],
-  collective_grief:  ['#a0a8b8', '#9898a8', '#b8b0c0', '#a8a0b8'],
-  cautious_optimism: ['#b8c8b0', '#c8d0b8', '#d0c8a8', '#c0ccb0'],
-  raw_uncertainty:   ['#c0b8a8', '#b8b0a0', '#ccc4b8', '#c8c0b0'],
+  // Warm stone vs cool slate — two forces pulling
+  gentle_tension:    ['#c4b5a5', '#8faab8', '#d4c4a8', '#7a9aaa'],
+  // Deep blue-greys — heavy, cold, still
+  deep_sorrow:       ['#607080', '#506070', '#788898', '#506878'],
+  // Soft sage + pale gold — growth without proclamation
+  quiet_hope:        ['#a8bc90', '#c8c890', '#b8d0a0', '#d0c8a0'],
+  // Amber + terracotta — heat, friction, movement
+  restless_energy:   ['#c8824a', '#b89060', '#d4a060', '#c07040'],
+  // Pale ice blue — surface stillness, barely holding
+  fragile_calm:      ['#a8c4d0', '#c0d4dc', '#b0ccd8', '#d0dce4'],
+  // Muted violet — shared weight, mourning
+  collective_grief:  ['#8878a8', '#787098', '#9888b0', '#706888'],
+  // Warm sage + cream — hope tempered, not declared
+  cautious_optimism: ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
+  // Also: API sometimes returns cautious_hope — handled as alias below
+  cautious_hope:     ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
+  // Warm taupe + grey — undefined, unresolved
+  raw_uncertainty:   ['#b8a890', '#a89880', '#c4b8a0', '#b0a888'],
 };
 
 const blobs = [
@@ -38,14 +56,18 @@ const blobs = [
 ];
 
 function setMood(archetype) {
-  const key = archetype ? archetype.toLowerCase().replace(/\s+/g, '_') : 'gentle_tension';
+  // Normalise: lowercase + underscores, strip spaces
+  const key = archetype ? archetype.toLowerCase().replace(/[\s-]+/g, '_') : 'gentle_tension';
   const p   = MOODS[key] || MOODS['gentle_tension'];
-  console.log(`[mood] Setting archetype: ${key}`, p);
+  if (!MOODS[key]) {
+    console.warn(`[mood] Unknown archetype "${archetype}", falling back to gentle_tension`);
+  }
+  console.log(`[mood] ${key}`, p);
 
-  // Update individual blob colours — CSS transition does the fade
+  // Update blob colours — CSS transition: background-color 2.6s ease handles the fade
   blobs.forEach((b, i) => { if (b) b.style.backgroundColor = p[i]; });
 
-  // Update mood-banner inner echo via CSS vars
+  // Update mood-banner inner echo vars
   const r = document.documentElement;
   r.style.setProperty('--blob-a', p[0]);
   r.style.setProperty('--blob-b', p[1]);
@@ -55,6 +77,7 @@ function setMood(archetype) {
 // ── Blob animation ────────────────────────────────────────────────────────────
 // Each blob drifts independently on a sine-wave path.
 // Different speed, amplitude, phase per blob — never in sync.
+// The card's backdrop-filter blur transmits these colours through the frosted glass.
 
 const blobDefs = [
   { bx: 0.18, by: 0.28, ax: 0.12, ay: 0.10, sx: 0.00031, sy: 0.00023, ph: 0.00 },
@@ -66,7 +89,7 @@ const blobDefs = [
 function animateBlobs(t) {
   const W = window.innerWidth;
   const H = window.innerHeight;
-  const half = W * 0.29;  // approx half of 58vmax
+  const half = W * 0.29;
 
   blobDefs.forEach((d, i) => {
     if (!blobs[i]) return;
@@ -78,7 +101,7 @@ function animateBlobs(t) {
 }
 requestAnimationFrame(animateBlobs);
 
-// Init with default palette so blobs aren't invisible before first API call
+// Init with default palette — blobs are visible before first API response
 setMood('gentle_tension');
 
 // ── Visualiser ────────────────────────────────────────────────────────────────
@@ -124,7 +147,6 @@ const Visualiser = (() => {
       ctx.clearRect(0, 0, W, H);
       let x = 0;
       for (let i = 0; i < bufLen; i++) {
-        // Centred symmetric bars
         const barH = (data[i] / 255) * H * 0.88;
         ctx.fillStyle = 'rgba(26,26,24,0.55)';
         ctx.fillRect(x, (H - barH) / 2, barW - 1, barH);
@@ -197,7 +219,6 @@ document.getElementById('date-input').addEventListener('change', async (e) => {
 async function loadEntry(date) {
   console.log(`[loadEntry] Loading: ${date}`);
 
-  // Reset state
   hide('entry-section');
   hide('no-entry-section');
   hide('meta-section');
@@ -213,7 +234,6 @@ async function loadEntry(date) {
     return;
   }
 
-  // Metadata
   try {
     const resp = await fetch(`${API}/api/entry/${date}`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -229,7 +249,6 @@ async function loadEntry(date) {
     return;
   }
 
-  // Audio
   const audioPlayer = document.getElementById('audio-player');
   document.getElementById('audio-status').textContent = 'Loading audio...';
 
@@ -256,7 +275,6 @@ async function loadEntry(date) {
 // ── Render metadata ───────────────────────────────────────────────────────────
 
 function renderMetadata(meta) {
-  // Format date: 2026-03-06 → 2026 — 03 — 06
   document.getElementById('entry-date').textContent =
     meta.date ? meta.date.replace(/-/g, ' — ') : '';
 
@@ -269,7 +287,6 @@ function renderMetadata(meta) {
   document.getElementById('entry-energy').textContent =
     meta.energy_level || '';
 
-  // Tension + hope as plain integers (0.7 → 70)
   document.getElementById('entry-tension').textContent =
     Math.round((meta.tension_level || 0) * 100);
 
@@ -282,7 +299,7 @@ function renderMetadata(meta) {
   document.getElementById('entry-themes').textContent =
     (meta.dominant_themes || []).join(', ');
 
-  // Drive mood from archetype — updates blobs + inner echo
+  // This is the reactive call — drives the entire background atmosphere
   setMood(meta.primary_archetype);
 }
 
