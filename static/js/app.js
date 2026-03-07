@@ -22,21 +22,21 @@ function pastTense(summary) {
 // calling createMediaElementSource() more than once on the same element.
 
 const Visualiser = (() => {
-  let audioCtx    = null;
-  let analyser    = null;
-  let sourceNode  = null;
+  let audioCtx = null;
+  let analyser = null;
+  let sourceNode = null;
   let animFrameId = null;
 
-  const canvas    = document.getElementById('waveform');
-  const ctx       = canvas ? canvas.getContext('2d') : null;
+  const canvas = document.getElementById('waveform');
+  const ctx = canvas ? canvas.getContext('2d') : null;
 
   function init(audioEl) {
     if (!canvas || !ctx) return false;
 
     try {
       if (!audioCtx) {
-        audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
-        analyser   = audioCtx.createAnalyser();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256; // 128 frequency bins
         sourceNode = audioCtx.createMediaElementSource(audioEl);
         sourceNode.connect(analyser);
@@ -54,7 +54,7 @@ const Visualiser = (() => {
     if (!analyser || !ctx) return;
 
     const bufferLength = analyser.frequencyBinCount;
-    const dataArray    = new Uint8Array(bufferLength);
+    const dataArray = new Uint8Array(bufferLength);
 
     const W = canvas.width;
     const H = canvas.height;
@@ -122,13 +122,13 @@ async function init() {
     availableDates = new Set(data.dates);
     console.log(`[init] ${data.count} dates available:`, data.dates);
 
-    const sorted   = data.dates.slice().sort();
+    const sorted = data.dates.slice().sort();
     const earliest = sorted[0];
-    const latest   = sorted[sorted.length - 1];
+    const latest = sorted[sorted.length - 1];
 
     const input = document.getElementById('date-input');
-    input.min   = earliest;
-    input.max   = latest;
+    input.min = earliest;
+    input.max = latest;
     input.value = latest;
 
     console.log(`[init] Calendar range: ${earliest} → ${latest}`);
@@ -153,9 +153,9 @@ document.getElementById('date-input').addEventListener('change', async (e) => {
 async function loadEntry(date) {
   console.log(`[loadEntry] Loading: ${date}`);
 
-  document.getElementById('entry-section').style.display    = 'none';
+  document.getElementById('entry-section').style.display = 'none';
   document.getElementById('no-entry-section').style.display = 'none';
-  document.getElementById('date-status').textContent        = '';
+  document.getElementById('date-status').textContent = '';
 
   // Stop and hide visualiser when switching dates
   Visualiser.hide();
@@ -183,7 +183,7 @@ async function loadEntry(date) {
   // ── Audio ──────────────────────────────────────────────────────────────────
   const audioStatus = document.getElementById('audio-status');
   const audioPlayer = document.getElementById('audio-player');
-  audioStatus.textContent   = 'Loading audio...';
+  audioStatus.textContent = 'Loading audio...';
   audioPlayer.style.display = 'none';
 
   try {
@@ -193,12 +193,12 @@ async function loadEntry(date) {
     const data = await resp.json();
     console.log(`[loadEntry] Audio URL received:`, data.url);
 
-    audioPlayer.src           = data.url;
+    audioPlayer.src = data.url;
     audioPlayer.style.display = 'block';
-    audioStatus.textContent   = '';
+    audioStatus.textContent = '';
 
     // Wire up visualiser events
-    audioPlayer.onplay  = () => Visualiser.start(audioPlayer);
+    audioPlayer.onplay = () => Visualiser.start(audioPlayer);
     audioPlayer.onpause = () => Visualiser.stop();
     audioPlayer.onended = () => Visualiser.hide();
 
@@ -213,13 +213,13 @@ async function loadEntry(date) {
 // ── Render metadata ───────────────────────────────────────────────────────────
 
 function renderMetadata(meta) {
-  document.getElementById('entry-date').textContent      = meta.date;
-  document.getElementById('entry-summary').textContent   = pastTense(meta.summary);
+  document.getElementById('entry-date').textContent = meta.date;
+  document.getElementById('entry-summary').textContent = pastTense(meta.summary);
   document.getElementById('entry-archetype').textContent = meta.primary_archetype;
-  document.getElementById('entry-energy').textContent    = meta.energy_level;
-  document.getElementById('entry-tension').textContent   = pct(meta.tension_level);
-  document.getElementById('entry-hope').textContent      = pct(meta.hope_factor);
-  document.getElementById('entry-prompt').textContent    = meta.prompt_natural;
+  document.getElementById('entry-energy').textContent = meta.energy_level;
+  document.getElementById('entry-tension').textContent = pct(meta.tension_level);
+  document.getElementById('entry-hope').textContent = pct(meta.hope_factor);
+  document.getElementById('entry-prompt').textContent = meta.prompt_natural;
 
   const themes = (meta.dominant_themes || []).join(', ');
   document.getElementById('entry-themes').textContent = themes;

@@ -23,11 +23,12 @@ from lib.cache import cache, start_cache
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-BASE_DIR   = Path(__file__).parent
+BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 
 
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,6 +54,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @app.get("/", include_in_schema=False)
 async def root():

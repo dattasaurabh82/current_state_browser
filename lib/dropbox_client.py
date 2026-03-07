@@ -46,10 +46,11 @@ ENV_FILE = Path(__file__).parent.parent / ".env"
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+
 def _load_credentials() -> dict:
     load_dotenv(ENV_FILE)
     creds = {
-        "client_id":     os.getenv("DROPBOX_CLIENT_ID"),
+        "client_id": os.getenv("DROPBOX_CLIENT_ID"),
         "client_secret": os.getenv("DROPBOX_CLIENT_SECRET"),
         "refresh_token": os.getenv("DROPBOX_REFRESH_TOKEN"),
     }
@@ -70,9 +71,9 @@ def get_access_token() -> str:
     resp = requests.post(
         TOKEN_URL,
         data={
-            "grant_type":    "refresh_token",
+            "grant_type": "refresh_token",
             "refresh_token": creds["refresh_token"],
-            "client_id":     creds["client_id"],
+            "client_id": creds["client_id"],
             "client_secret": creds["client_secret"],
         },
         timeout=30,
@@ -84,6 +85,7 @@ def get_access_token() -> str:
 
 
 # ── File listing ──────────────────────────────────────────────────────────────
+
 
 def _auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -168,8 +170,10 @@ def build_date_map(entries: list[dict]) -> dict[str, dict]:
     complete: dict[str, dict] = {}
     for date, files in sorted(by_date.items()):
         if not files["wavs"] or not files["zips"]:
-            logger.debug(f"Skipping incomplete date: {date} "
-                         f"(wav={len(files['wavs'])}, zip={len(files['zips'])})")
+            logger.debug(
+                f"Skipping incomplete date: {date} "
+                f"(wav={len(files['wavs'])}, zip={len(files['zips'])})"
+            )
             continue
 
         # Pick latest wav by timestamp embedded in filename
@@ -185,6 +189,7 @@ def build_date_map(entries: list[dict]) -> dict[str, dict]:
 
 
 # ── Audio temp link ───────────────────────────────────────────────────────────
+
 
 def get_audio_temp_link(token: str, dropbox_path: str) -> str:
     """
@@ -205,6 +210,7 @@ def get_audio_temp_link(token: str, dropbox_path: str) -> str:
 
 
 # ── Metadata (zip) ────────────────────────────────────────────────────────────
+
 
 def fetch_and_parse_zip(token: str, dropbox_path: str) -> Optional[dict]:
     """
@@ -242,17 +248,17 @@ def extract_display_metadata(raw: dict) -> dict:
       date, summary, dominant_themes, energy_level,
       tension_level, hope_factor, primary_archetype, prompt_natural
     """
-    analysis  = raw.get("analysis", {})
+    analysis = raw.get("analysis", {})
     selection = raw.get("selection", {})
-    prompt    = raw.get("prompt", {})
+    prompt = raw.get("prompt", {})
 
     return {
-        "date":             raw.get("date", ""),
-        "summary":          analysis.get("summary", ""),
-        "dominant_themes":  analysis.get("dominant_themes", []),
-        "energy_level":     analysis.get("energy_level", ""),
-        "tension_level":    analysis.get("tension_level", 0),
-        "hope_factor":      analysis.get("hope_factor", 0),
+        "date": raw.get("date", ""),
+        "summary": analysis.get("summary", ""),
+        "dominant_themes": analysis.get("dominant_themes", []),
+        "energy_level": analysis.get("energy_level", ""),
+        "tension_level": analysis.get("tension_level", 0),
+        "hope_factor": analysis.get("hope_factor", 0),
         "primary_archetype": selection.get("primary", ""),
-        "prompt_natural":   prompt.get("prompt_natural", ""),
+        "prompt_natural": prompt.get("prompt_natural", ""),
     }

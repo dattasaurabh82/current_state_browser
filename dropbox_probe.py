@@ -24,17 +24,22 @@ ENV_FILE = Path(__file__).parent / ".env"
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+
 def _load_env():
     load_dotenv(ENV_FILE)
-    client_id     = os.getenv("DROPBOX_CLIENT_ID")
+    client_id = os.getenv("DROPBOX_CLIENT_ID")
     client_secret = os.getenv("DROPBOX_CLIENT_SECRET")
     refresh_token = os.getenv("DROPBOX_REFRESH_TOKEN")
 
-    missing = [k for k, v in {
-        "DROPBOX_CLIENT_ID": client_id,
-        "DROPBOX_CLIENT_SECRET": client_secret,
-        "DROPBOX_REFRESH_TOKEN": refresh_token,
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "DROPBOX_CLIENT_ID": client_id,
+            "DROPBOX_CLIENT_SECRET": client_secret,
+            "DROPBOX_REFRESH_TOKEN": refresh_token,
+        }.items()
+        if not v
+    ]
 
     if missing:
         raise RuntimeError(f"Missing in .env: {', '.join(missing)}")
@@ -63,6 +68,7 @@ def get_access_token() -> str:
 
 # ── Dropbox listing ───────────────────────────────────────────────────────────
 
+
 def list_all_files(token: str) -> list:
     """List every file in DROPBOX_FOLDER, handling pagination."""
     headers = {
@@ -71,7 +77,7 @@ def list_all_files(token: str) -> list:
     }
 
     entries = []
-    url  = "https://api.dropboxapi.com/2/files/list_folder"
+    url = "https://api.dropboxapi.com/2/files/list_folder"
     data = {"path": DROPBOX_FOLDER, "limit": 2000}
 
     while True:
@@ -84,15 +90,13 @@ def list_all_files(token: str) -> list:
         resp.raise_for_status()
         result = resp.json()
 
-        entries.extend(
-            e for e in result.get("entries", []) if e[".tag"] == "file"
-        )
+        entries.extend(e for e in result.get("entries", []) if e[".tag"] == "file")
 
         if not result.get("has_more"):
             break
 
         # Continue pagination
-        url  = "https://api.dropboxapi.com/2/files/list_folder/continue"
+        url = "https://api.dropboxapi.com/2/files/list_folder/continue"
         data = {"cursor": result["cursor"]}
 
     return entries
@@ -112,6 +116,7 @@ def extract_date(name: str):
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main():
     token = get_access_token()
@@ -149,7 +154,7 @@ def main():
     print("DATE SUMMARY")
     print("=" * 60)
 
-    complete_days   = 0
+    complete_days = 0
     incomplete_days = 0
 
     for d in dates_sorted:

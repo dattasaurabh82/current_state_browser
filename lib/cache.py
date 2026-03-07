@@ -41,11 +41,12 @@ from lib.dropbox_client import (
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-REFRESH_INTERVAL_SEC = 30 * 60        # 30 minutes
-AUDIO_LINK_TTL_SEC   = 3.5 * 60 * 60  # 3.5 hours
+REFRESH_INTERVAL_SEC = 30 * 60  # 30 minutes
+AUDIO_LINK_TTL_SEC = 3.5 * 60 * 60  # 3.5 hours
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
+
 
 class AppCache:
     """
@@ -186,8 +187,8 @@ class AppCache:
     def status(self) -> dict:
         """Quick status snapshot for health/debug endpoint."""
         return {
-            "dates_loaded":   len(self._date_map),
-            "last_refresh":   self._last_refresh,
+            "dates_loaded": len(self._date_map),
+            "last_refresh": self._last_refresh,
             "audio_links_cached": len(self._audio_links),
         }
 
