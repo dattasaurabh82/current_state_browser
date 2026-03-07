@@ -1,0 +1,23 @@
+# Environment
+.env
+
+# uv / Python
+.venv/
+.python-version
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.cache/
+
+# Logs
+logs/
+*.log
+
+# macOS
+.DS_Store
+
+# Project-specific
+context/
+dropbox_probe_result.json
