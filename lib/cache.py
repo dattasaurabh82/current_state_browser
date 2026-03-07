@@ -7,12 +7,21 @@ Responsibilities:
 - Audio temp links: generate on demand, cache for 3.5h per date
 
 Why in-memory (not disk):
-  ~40 entries, each metadata payload is a few hundred bytes.
-  Total in-memory cost is negligible. No disk I/O, no stale files,
-  works cleanly on Render's ephemeral filesystem.
+  Each date's metadata is ~1-2KB of JSON. At current growth rate
+  (1 date/day) this reaches ~500KB after a year, ~5MB after 10 years.
+  Render Starter has 512MB RAM. Not a concern for the lifetime of the project.
+  No disk I/O, no stale files, works cleanly on Render's ephemeral filesystem.
+
+Startup fetch (parallel):
+  On first startup, ALL new dates are fetched concurrently via asyncio.gather().
+  Dropbox zip fetches are I/O-bound and independent — parallelising collapses
+  39× ~1s calls into ~3-5s total. This scales permanently: 365 dates still
+  takes ~3-5s because all calls fire simultaneously.
 
 Refresh cycle (30 min):
   Dropbox token is refreshed at the start of each cycle.
+  new_dates = all dates not yet in self._metadata — almost always 0 or 1.
+  So background refresh cost is constant regardless of archive size.
   A fresh token is valid for ~4 hours so this is well within limits.
 
 Audio link cache (3.5h TTL):
@@ -41,8 +50,8 @@ from lib.dropbox_client import (
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-REFRESH_INTERVAL_SEC = 30 * 60  # 30 minutes
-AUDIO_LINK_TTL_SEC = 3.5 * 60 * 60  # 3.5 hours
+REFRESH_INTERVAL_SEC = 30 * 60       # 30 minutes
+AUDIO_LINK_TTL_SEC   = 3.5 * 60 * 60  # 3.5 hours
 
 
 # ── State ─────────────────────────────────────────────────────────────────────
@@ -130,10 +139,33 @@ class AppCache:
             self._token = await asyncio.to_thread(get_access_token)
         return self._token
 
+    async def _fetch_one_date(self, token: str, date: str, zip_path: str) -> tuple[str, Optional[dict]]:
+        """
+        Fetch and parse a single zip from Dropbox.
+        Returns (date, metadata_dict) or (date, None) on failure.
+        Designed to be called concurrently via asyncio.gather().
+        """
+        try:
+            raw = await asyncio.to_thread(fetch_and_parse_zip, token, zip_path)
+            if raw:
+                return date, extract_display_metadata(raw)
+            else:
+                logger.warning(f"  Could not parse zip for {date}, skipping")
+                return date, None
+        except Exception as e:
+            logger.error(f"  Failed to fetch zip for {date}: {e}")
+            return date, None
+
     async def refresh(self):
         """
         Full refresh: re-list Dropbox, rebuild date map, reload all metadata.
         Called on startup and then every REFRESH_INTERVAL_SEC.
+
+        New dates are fetched CONCURRENTLY via asyncio.gather() — all zip
+        downloads fire simultaneously. On first startup (all dates new) this
+        collapses N×~1s sequential calls into ~3-5s regardless of N.
+        On subsequent refreshes new_dates is usually 0-1 so the difference
+        is imperceptible, but the code handles both cases identically.
         """
         logger.info("Cache refresh starting...")
         start = time.time()
@@ -147,22 +179,28 @@ class AppCache:
             entries = await asyncio.to_thread(list_all_dropbox_files, token)
             date_map = await asyncio.to_thread(build_date_map, entries)
 
-            # Fetch metadata for any date we don't have yet
+            # Identify dates we don't have metadata for yet
             new_dates = set(date_map.keys()) - set(self._metadata.keys())
             if new_dates:
-                logger.info(f"Fetching metadata for {len(new_dates)} new date(s)...")
+                logger.info(f"Fetching metadata for {len(new_dates)} new date(s) (parallel)...")
             else:
                 logger.info("No new dates found.")
 
-            for date in sorted(new_dates):
-                zip_path = date_map[date]["zip_path"]
-                raw = await asyncio.to_thread(fetch_and_parse_zip, token, zip_path)
-                if raw:
-                    self._metadata[date] = extract_display_metadata(raw)
-                    logger.debug(f"  Loaded metadata for {date}")
-                else:
-                    logger.warning(f"  Could not load metadata for {date}, skipping")
-                    date_map.pop(date, None)  # exclude from date map too
+            # ── Parallel fetch: all new zips fire at once ──────────────────
+            if new_dates:
+                tasks = [
+                    self._fetch_one_date(token, date, date_map[date]["zip_path"])
+                    for date in sorted(new_dates)
+                ]
+                results = await asyncio.gather(*tasks)
+
+                for date, metadata in results:
+                    if metadata is not None:
+                        self._metadata[date] = metadata
+                        logger.debug(f"  Loaded metadata for {date}")
+                    else:
+                        # Exclude failed dates from the live date_map
+                        date_map.pop(date, None)
 
             # Remove dates that have disappeared from Dropbox
             removed = set(self._date_map.keys()) - set(date_map.keys())
