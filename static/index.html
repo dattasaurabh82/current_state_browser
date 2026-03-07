@@ -8,7 +8,11 @@
 <body>
 
   <h1>current_state</h1>
-  <p>An archive of AI-generated ambient music based on daily world news.</p>
+  <p>
+    An archive of AI-generated ambient music based on daily world news,
+    by <a href="https://www.dattasaurabh.com/Current-State" target="_blank" rel="noopener">Saurabh Datta</a>.
+    Source on <a href="https://github.com/dattasaurabh82/current_state" target="_blank" rel="noopener">GitHub</a>.
+  </p>
 
   <hr>
 
@@ -69,7 +73,16 @@
     <p>No entry available for this date.</p>
   </section>
 
+  <hr>
+
+  <footer>
+    <p>Saurabh Datta | Berlin | &copy; <span id="footer-year"></span> — All rights reserved.</p>
+  </footer>
+
   <script>
+    // Dynamic copyright year
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
     const API = '';  // same origin
 
     let availableDates = new Set();
