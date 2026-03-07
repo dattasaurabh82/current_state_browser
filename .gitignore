@@ -21,3 +21,6 @@ logs/
 # Project-specific
 context/
 dropbox_probe_result.json
+
+# Tests
+test_*
