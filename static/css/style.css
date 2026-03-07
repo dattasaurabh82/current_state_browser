@@ -1,11 +1,323 @@
 /* current_state browser — stylesheet */
 
-/* ── Utilities ────────────────────────────────────────────── */
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-.hidden {
-  display: none;
+/* ── Tokens ─────────────────────────────────────────────────── */
+:root {
+  --ink:        #1a1a18;
+  --ink-mid:    #5a5851;
+  --ink-faint:  #9e9990;
+  --rule:       rgba(26,26,24,0.10);
+  --serif:      'EB Garamond', Georgia, serif;
+  --mono:       'IBM Plex Mono', 'Courier New', monospace;
+  /* Blob colours — swapped by JS on archetype change */
+  --blob-a: #c9bfb4;
+  --blob-b: #a8b5c2;
+  --blob-c: #d4c8b8;
 }
 
-.full-width {
+/* ── Base ───────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-size: 17px;
+}
+body {
+  font-family: var(--serif);
+  background: #e4e0d8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  position: relative;
+}
+
+/* ── Mood blobs ─────────────────────────────────────────────── */
+/* Individual fixed circles — colour set by JS, position animated by JS RAF */
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  width: 58vmax;
+  height: 58vmax;
+  filter: blur(80px);
+  opacity: 0.68;
+  z-index: 0;
+  pointer-events: none;
+  will-change: transform;
+  /* Smooth colour transition when archetype changes */
+  transition: background-color 2.6s ease, opacity 2s ease;
+}
+
+/* ── Card ───────────────────────────────────────────────────── */
+.card {
+  position: relative;
+  z-index: 1;
   width: 100%;
+  max-width: 580px;
+  height: calc(100dvh - 32px);
+  max-height: 820px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(244, 241, 236, 0.82);
+  backdrop-filter: blur(32px) saturate(1.3);
+  -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  animation: card-breathe 8s ease-in-out infinite;
+  border-radius: 20px;
+  box-shadow:
+    0 2px  4px  rgba(0,0,0,0.04),
+    0 8px  24px rgba(0,0,0,0.09),
+    0 32px 72px rgba(0,0,0,0.11),
+    inset 0 0 0 1px rgba(255,255,255,0.55);
+  overflow: hidden;
+}
+
+@keyframes card-breathe {
+  0%, 100% {
+    backdrop-filter: blur(32px) saturate(1.3);
+    -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  }
+  50% {
+    backdrop-filter: blur(22px) saturate(1.1);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  }
+}
+
+/* ── Shared horizontal padding ──────────────────────────────── */
+.card-header, .picker-zone, .mood-banner,
+.meta-block, .music-prompt, .audio-zone, .card-footer {
+  padding-left: 28px;
+  padding-right: 28px;
+  flex-shrink: 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.site-name {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.site-tagline {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  color: var(--ink-faint);
+}
+
+/* ── Picker ─────────────────────────────────────────────────── */
+.picker-zone {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.picker-label {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+  margin-bottom: 6px;
+}
+#date-input {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(26,26,24,0.22);
+  padding: 2px 0 4px;
+  outline: none;
+  cursor: pointer;
+}
+#date-input:focus { border-bottom-color: var(--ink); }
+#date-status {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  color: var(--ink-faint);
+  margin-left: 12px;
+}
+
+/* ── Mood banner ─────────────────────────────────────────────── */
+/* flex:1 — absorbs remaining vertical space so card never overflows */
+.mood-banner {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Inner echo of blob colours — updated via CSS vars by JS */
+.mood-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 15% 50%, var(--blob-a) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 90% at 85% 60%, var(--blob-b) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 55% at 60% 10%, var(--blob-c) 0%, transparent 55%);
+  opacity: 0.30;
+  transition: opacity 2s ease;
+}
+
+.mood-banner--empty {
+  justify-content: center;
+  align-items: flex-start;
+}
+.no-entry-text {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono);
+  font-size: 0.70rem;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+.entry-date {
+  position: relative;
+  z-index: 1;
+  font-family: var(--mono);
+  font-size: 0.60rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  margin-bottom: 12px;
+}
+.entry-summary {
+  position: relative;
+  z-index: 1;
+  font-family: var(--serif);
+  font-size: clamp(1.05rem, 2.1vw, 1.42rem);
+  line-height: 1.50;
+  color: var(--ink);
+}
+
+/* ── Metadata ────────────────────────────────────────────────── */
+.meta-block {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--rule);
+}
+.meta-row {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+  gap: 10px;
+}
+.meta-row:last-child { border-bottom: none; }
+.meta-key {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.meta-val {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--ink-mid);
+}
+.meta-archetype .meta-val {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+.meta-pair { display: flex; gap: 24px; }
+.meta-pair-item { display: flex; flex-direction: column; gap: 1px; }
+.meta-pair-sub {
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.meta-pair-num {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 300;
+  color: var(--ink-mid);
+}
+
+/* ── Music prompt ────────────────────────────────────────────── */
+.music-prompt {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.music-prompt-label {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+  margin-bottom: 6px;
+}
+.music-prompt-text {
+  font-family: var(--serif);
+  font-size: 0.90rem;
+  line-height: 1.55;
+  color: var(--ink-mid);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Audio zone ──────────────────────────────────────────────── */
+.audio-zone {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.audio-status {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  min-height: 1em;
+  margin-bottom: 8px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.card-footer {
+  padding-top: 10px;
+  padding-bottom: 13px;
+}
+.footer-text {
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+/* ── Utilities ───────────────────────────────────────────────── */
+.hidden  { display: none !important; }
+.full-width { width: 100%; }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  body { padding: 10px; }
+  .card { height: calc(100dvh - 20px); border-radius: 16px; }
+  .card-header, .picker-zone, .mood-banner,
+  .meta-block, .music-prompt, .audio-zone,
+  .card-footer { padding-left: 18px; padding-right: 18px; }
+  .meta-row { grid-template-columns: 88px 1fr; }
 }

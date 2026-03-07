@@ -1,93 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>current_state browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
-
 <body>
 
-  <h1>current_state Browser</h1>
+  <!-- Four independent mood blobs — animated by app.js -->
+  <div class="blob" id="blob-a"></div>
+  <div class="blob" id="blob-b"></div>
+  <div class="blob" id="blob-c"></div>
+  <div class="blob" id="blob-d"></div>
 
-  <p>
-    current_state browser is a slow archive. Every day,
-    <a href="https://www.dattasaurabh.com/Current-State" target="_blank" rel="noopener">Saurabh Datta's system</a>,
-    in Berlin, reads the news, feels the weight of it, and makes a piece of music.
-    Not about the headlines — from them. What you hear is what that day carried.
-    <a href="https://github.com/dattasaurabh82/current_state" target="_blank" rel="noopener">Open source</a>.
-  </p>
+  <div class="card">
 
-  <hr>
+    <!-- Header -->
+    <div class="card-header">
+      <span class="site-name">current_state browser</span>
+      <span class="site-tagline">Berlin · daily · since 09.01.2026</span>
+    </div>
 
-  <section id="picker-section">
-    <label for="date-input"><strong>Select a date:</strong></label><br><br>
-    <input type="date" id="date-input" />
-    <span id="date-status"></span>
-  </section>
+    <!-- Date picker -->
+    <div class="picker-zone">
+      <label class="picker-label" for="date-input">Select a date</label>
+      <input type="date" id="date-input" />
+      <span id="date-status"></span>
+    </div>
 
-  <hr>
+    <!-- Entry: mood banner + summary -->
+    <div class="mood-banner hidden" id="entry-section">
+      <p class="entry-date" id="entry-date"></p>
+      <p class="entry-summary" id="entry-summary"></p>
+    </div>
 
-  <section id="entry-section" class="hidden">
+    <!-- No entry state -->
+    <div class="mood-banner mood-banner--empty hidden" id="no-entry-section">
+      <p class="no-entry-text">No entry available for this date.</p>
+    </div>
 
-    <h2 id="entry-date"></h2>
+    <!-- Metadata -->
+    <div class="meta-block hidden" id="meta-section">
+      <div class="meta-row">
+        <span class="meta-key">Themes</span>
+        <span class="meta-val" id="entry-themes"></span>
+      </div>
+      <div class="meta-row meta-archetype">
+        <span class="meta-key">current_state</span>
+        <span class="meta-val" id="entry-archetype"></span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-key">Energy</span>
+        <span class="meta-val" id="entry-energy"></span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-key">Affect</span>
+        <span class="meta-val">
+          <span class="meta-pair">
+            <span class="meta-pair-item">
+              <span class="meta-pair-sub">Tension</span>
+              <span class="meta-pair-num" id="entry-tension"></span>
+            </span>
+            <span class="meta-pair-item">
+              <span class="meta-pair-sub">Hope</span>
+              <span class="meta-pair-num" id="entry-hope"></span>
+            </span>
+          </span>
+        </span>
+      </div>
+    </div>
 
-    <p id="entry-summary"></p>
+    <!-- Music prompt -->
+    <div class="music-prompt hidden" id="music-section">
+      <span class="music-prompt-label">Music</span>
+      <p class="music-prompt-text"><em><span id="entry-prompt"></span></em></p>
+    </div>
 
-    <p>
-      <strong>Themes:</strong>
-      <span id="entry-themes"></span>
-    </p>
-
-    <p>
-      <strong>current_state:</strong>
-      <span id="entry-archetype"></span>
-    </p>
-
-    <p>
-      <strong>Energy:</strong>
-      <span id="entry-energy"></span>
-    </p>
-
-    <p>
-      <strong>Tension:</strong>
-      <span id="entry-tension"></span>
-    </p>
-
-    <p>
-      <strong>Hope:</strong>
-      <span id="entry-hope"></span>
-    </p>
-
-    <p>
-      <strong>Music:</strong>
-      <em><span id="entry-prompt"></span></em>
-    </p>
-
-    <br>
-
-    <div id="audio-section">
-      <p id="audio-status">Loading audio...</p>
-      <canvas id="waveform" width="600" height="80" class="hidden full-width"></canvas>
+    <!-- Audio -->
+    <div class="audio-zone">
+      <p class="audio-status" id="audio-status"></p>
+      <canvas id="waveform" width="600" height="36" class="hidden full-width"></canvas>
       <audio id="audio-player" controls class="hidden full-width" crossorigin="anonymous"></audio>
     </div>
 
-  </section>
+    <!-- Footer -->
+    <div class="card-footer">
+      <p class="footer-text">
+        Saurabh Datta &nbsp;·&nbsp; Berlin &nbsp;·&nbsp;
+        &copy; <span id="footer-year"></span> — All rights reserved.
+      </p>
+    </div>
 
-  <section id="no-entry-section" class="hidden">
-    <p>No entry available for this date.</p>
-  </section>
-
-  <hr>
-
-  <footer>
-    <p>Saurabh Datta | Berlin | &copy; <span id="footer-year"></span> — All rights reserved.</p>
-  </footer>
+  </div><!-- /card -->
 
   <script src="/static/js/app.js"></script>
-
 </body>
-
 </html>
