@@ -37,16 +37,16 @@ This is the part worth understanding before anything else. There are three syste
 
 ```mermaid
 flowchart TD
-    A["🖥️ Raspberry Pi — Berlin\n3 AM daily cron"]
-    B["📦 Dropbox\n/currentStateMusicFilesBKP"]
-    C["⚡ FastAPI server\nRender · Frankfurt"]
+    A["🖥️ Raspberry Pi — Berlin<br/>3 AM daily cron"]
+    B["📦 Dropbox<br/>/currentStateMusicFilesBKP"]
+    C["⚡ FastAPI server<br/>Render · Frankfurt"]
     D["🌐 Browser"]
-    E["🎵 Dropbox CDN\ndirect audio stream"]
+    E["🎵 Dropbox CDN<br/>direct audio stream"]
 
-    A -->|"generation_results_YYYY-MM-DD.zip\npipeline_results.json inside"| B
+    A -->|"generation_results_YYYY-MM-DD.zip<br/>pipeline_results.json inside"| B
     A -->|"theme_YYYY-MM-DD_HH-MM-SS.wav"| B
-    B -->|"startup: fetch all zips → parse JSON\n30-min refresh: delta only"| C
-    D -->|"GET /api/dates\nGET /api/entry/{date}\nGET /api/audio/{date}"| C
+    B -->|"startup: fetch all zips → parse JSON<br/>30-min refresh: delta only"| C
+    D -->|"GET /api/dates<br/>GET /api/entry/{date}<br/>GET /api/audio/{date}"| C
     C -->|"metadata from memory (instant)"| D
     C -->|"Dropbox temp link (4h TTL)"| D
     D -->|"streams audio directly"| E
@@ -83,7 +83,8 @@ current_state_browser/
 │   ├── session_01_context.md
 │   ├── session_02_context.md
 │   ├── mood_system_mechanics.md
-│   └── caching_architecture.md
+│   ├── caching_architecture.md
+│   └── future_work.md
 │
 ├── tests/
 │   ├── test_step1.py          # Dropbox auth + listing
@@ -206,10 +207,10 @@ Dropbox temporary links expire after 4 hours. We don't pre-generate them for all
 ```mermaid
 flowchart TD
     A["Browser requests /api/audio/2026-03-06"]
-    B{"Cache hit?\nLink exists + not expired?"}
+    B{"Cache hit?<br/>Link exists + not expired?"}
     C["Return cached URL instantly"]
     D["Acquire asyncio.Lock"]
-    E{"Double-check\nafter lock acquired"}
+    E{"Double-check<br/>after lock acquired"}
     F["Call Dropbox get_temporary_link"]
     G["Store with expires_at = now + 3.5h"]
     H["Return URL"]
@@ -267,13 +268,13 @@ generation_results_YYYY-MM-DD.zip
 
 ```mermaid
 flowchart LR
-    A["DROPBOX_REFRESH_TOKEN\n(env var, permanent)"]
-    B["get_access_token()\nPOST to Dropbox OAuth2"]
-    C["Access token\n(in-memory, ~4h TTL)"]
-    D["API calls\nlist / download / temp link"]
+    A["DROPBOX_REFRESH_TOKEN<br/>(env var, permanent)"]
+    B["get_access_token()<br/>POST to Dropbox OAuth2"]
+    C["Access token<br/>(in-memory, ~4h TTL)"]
+    D["API calls<br/>list / download / temp link"]
 
     A --> B --> C --> D
-    B -.->|"re-called every 30min\n+ on-demand for audio links"| C
+    B -.->|"re-called every 30min<br/>+ on-demand for audio links"| C
 ```
 
 The refresh token lives in Render env vars. The access token lives in `AppCache._token`. The server never writes credentials to disk. Rotating the refresh token (if needed) is a dashboard env var change + redeploy.
@@ -290,13 +291,13 @@ This is the bit that makes the UI feel alive. Every date has a `primary_archetyp
 flowchart TD
     A["loadEntry(date)"]
     B["GET /api/entry/{date}"]
-    C["meta.primary_archetype\ne.g. 'gentle_tension'"]
+    C["meta.primary_archetype<br/>e.g. 'gentle_tension'"]
     D["setMood(archetype)"]
-    E["MOODS lookup\n→ 4 hex colours"]
-    F["blob-a/b/c/d\nbackgroundColor\n↳ CSS transition 2.6s"]
-    G["--blob-a/b/c\nCSS custom props\n↳ mood-banner inner echo"]
-    H["Background atmosphere shifts\n(slow, atmospheric)"]
-    I["Summary text zone\nhas colour echo"]
+    E["MOODS lookup<br/>→ 4 hex colours"]
+    F["blob-a/b/c/d<br/>backgroundColor<br/>↳ CSS transition 2.6s"]
+    G["--blob-a/b/c<br/>CSS custom props<br/>↳ mood-banner inner echo"]
+    H["Background atmosphere shifts<br/>(slow, atmospheric)"]
+    I["Summary text zone<br/>has colour echo"]
 
     A --> B --> C --> D --> E
     E --> F --> H
@@ -357,7 +358,7 @@ const blobDefs = [
 
 ## The waveform visualiser
 
-When audio plays, a canvas visualiser appears above the player. A few design decisions worth noting:
+When audio plays, a canvas visualiser appears above the player.
 
 **Sausage / lens envelope shape.** Raw FFT data from the Web Audio API goes from loud (bass, index 0) to quiet (treble, last index). If you draw it left-to-right, you get a shape that's tall on the left and tapers to nothing on the right — ugly and unbalanced. Instead, we rearrange the bins into a palindrome:
 
@@ -369,51 +370,6 @@ sausage: [treble ... bass ... treble]
 Left half descends toward the centre (getting louder), right half mirrors it. The result is a symmetric lens shape that peaks in the middle — quiet at the edges, loud at the centre. Much more pleasing for ambient music, which tends to have strong bass and soft highs.
 
 **Vertically centred bars.** Each bar is drawn from `(H - barH) / 2` — centred on the canvas midline, growing up and down equally. This keeps the visualiser looking balanced regardless of the audio amplitude.
-
----
-
-## Frontend design system
-
-### Card layout
-
-The whole UI is a single frosted-glass card. The layout is a flex column where every section is `flex-shrink: 0` (fixed height) *except* `.mood-banner`, which is `flex: 1`. This means the mood banner — where the summary text lives — absorbs all remaining vertical space. The card is always exactly `calc(100dvh - 32px)`, never taller, never scrolling.
-
-```mermaid
-block-beta
-  columns 1
-  header["card-header\n(fixed)"]
-  about["about-zone\n(fixed)"]
-  picker["picker-zone\n(fixed)"]
-  banner["mood-banner\nflex: 1 — absorbs remaining height\n★ this is what keeps the card locked to viewport"]
-  meta["meta-block\n(fixed)"]
-  music["music-prompt\n(fixed)"]
-  audio["audio-zone\n(fixed)"]
-  footer["card-footer\n(fixed)"]
-```
-
-### Typography
-
-Two typefaces only:
-
-| Font | Usage | Rationale |
-|------|-------|-----------|
-| **EB Garamond** | Summary text, music prompt, archetype (italic) | Emotional, warm, literary — for content that carries meaning |
-| **IBM Plex Mono** | All labels, metadata values, UI chrome | Precise, cool, machine-readable — for data and interface |
-
-The contrast between them is intentional. When you read the summary in Garamond and the metadata in Plex Mono, you're reading two different registers of the same day.
-
-### Design tokens
-
-```css
-:root {
-  --ink:       #1a1a18;  /* near-black with a warm undertone */
-  --ink-mid:   #5a5851;  /* mid-grey for metadata values */
-  --ink-faint: #9e9990;  /* labels, UI chrome, captions */
-  --rule:      rgba(26,26,24,0.10); /* horizontal separators */
-}
-```
-
-No accent colour. The only colour in the UI comes from the blobs behind it.
 
 ---
 
@@ -461,7 +417,7 @@ You get these from the [Dropbox App Console](https://www.dropbox.com/developers/
 
 ```bash
 uv run tests/test_step1.py   # Dropbox auth + file listing
-uv run tests/test_step2.py   # Cache load + metadata parse
+uv run tests/test_step2.py   # Cache load + metadata fetch
 ```
 
 ---
@@ -532,19 +488,6 @@ The Dropbox temp link probably expired between when it was cached and when you h
 
 ---
 
-## Known limitations and future work
-
-> [!NOTE]
-> This is a personal archival project, not a product. The list below reflects genuine future intentions, not a backlog.
-
-- **favicon.ico** — cosmetic 404 in browser console. Will add a simple one.
-- **CSP headers** — deliberately omitted for now (breaks Swagger UI). Worth revisiting post-launch with a permissive policy that allows CDN sources only for `/docs`.
-- **New archetypes** — the LLM pipeline on the Pi occasionally produces new archetype strings. When one appears in production that isn't in the `MOODS` map, it falls back to `gentle_tension`. Monitor `[mood] Unknown archetype` warnings in Render logs and add new entries to `app.js` as needed.
-- **Dropbox pagination** — `list_all_dropbox_files` handles up to 2000 entries per API call. At current growth rate (~2 files/day), this won't need changing for ~3 years. After that, add cursor-based delta listing.
-- **`design_test_02.html`** — local design exploration file. Should be gitignored or moved to `context/` before any public promotion of the repo.
-
----
-
 ## Related
 
 - **[current_state](https://github.com/dattasaurabh82/current_state)** — the Raspberry Pi system that generates the music and uploads the archives this browser reads from
@@ -554,6 +497,6 @@ The Dropbox temp link probably expired between when it was cached and when you h
 
 ## License
 
-© Saurabh Datta, Berlin, 2026. All rights reserved.
+This code is open source under the [MIT License](LICENSE).
 
-The code in this repository is open source for reference and learning. The generated music, pipeline results, and archival data are not licensed for reuse without permission.
+© Saurabh Datta, Berlin, 2026. The generated music, pipeline results, and archival data are not covered by this license.
