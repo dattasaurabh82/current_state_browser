@@ -23,7 +23,7 @@
 
 Every day, a Raspberry Pi in Berlin wakes up at 3 AM, reads the news, runs it through an LLM pipeline that analyses the emotional weight of the day — the tension, the hope, the themes — and generates a piece of ambient music from that analysis. Not music *about* the news. Music *from* it. There's a difference.
 
-This browser is how you get to that archive. Pick a date, read what the system felt about that day, and listen to the music it made. The background of the page shifts colour based on the emotional archetype of whatever day you're looking at. It's subtle — the whole thing is designed to be slow and quiet, like the music itself.
+This browser is how you get to that archive. Pick a date, read what the system felt about that day, and listen to the music it made. The background of the page shifts to a colour atmosphere unique to that date. It's subtle — the whole thing is designed to be slow and quiet, like the music itself.
 
 Think of it less like a music player and more like a **temporal journal that happens to have audio**. The date picker is the main navigation. You're navigating through time, not a playlist.
 
@@ -77,7 +77,7 @@ current_state_browser/
 ├── static/
 │   ├── index.html             # Single-page UI — frosted card, blob background
 │   ├── css/style.css          # Design system — tokens, card, blobs, mood zones
-│   └── js/app.js              # API calls, mood system, blob animation, waveform visualiser
+│   └── js/app.js              # API calls, date-seeded colours, blob animation, waveform
 │
 ├── context/                   # Internal session docs (not shipped, not relevant to users)
 │   ├── session_01_context.md
@@ -129,7 +129,7 @@ The server exposes a dead-simple read-only JSON API. No auth, no rate limiting, 
 
 > **`tension_level` and `hope_factor`** are floats 0–1 from the LLM pipeline. The UI multiplies them by 100 for display. They don't sum to 1 — they're independent scores.
 
-> **`primary_archetype`** drives the entire visual mood system. See [The Mood System](#the-mood-system) below.
+> **`primary_archetype`** is displayed as a label in the UI but does **not** drive the visual colour system. See [The Mood System](#the-mood-system) below.
 
 ---
 
@@ -283,20 +283,22 @@ The refresh token lives in Render env vars. The access token lives in `AppCache.
 
 ## The mood system
 
-This is the bit that makes the UI feel alive. Every date has a `primary_archetype` in its metadata — a string like `"gentle_tension"` or `"restless_energy"` assigned by the LLM pipeline on the Pi. When you pick a date, that archetype drives the entire visual atmosphere of the page.
+This is the bit that makes the UI feel alive. When you pick a date, the background shifts to a colour atmosphere unique to that date — the blobs behind the frosted card change colour, the frosted glass transmits them, the summary text zone has a subtle inner echo.
 
-### Data flow
+### How colours are generated
+
+There's no predefined palette map and no archetype lookup. The **date string itself is the seed**. Hash it, feed it into a PRNG, pull 4 HSL colours in an editorial range. Same date always looks the same. Every date looks different.
 
 ```mermaid
 flowchart TD
     A["loadEntry(date)"]
     B["GET /api/entry/{date}"]
-    C["meta.primary_archetype<br/>e.g. 'gentle_tension'"]
-    D["setMood(archetype)"]
-    E["MOODS lookup<br/>→ 4 hex colours"]
+    C["meta.date<br/>e.g. '2026-03-06'"]
+    D["setMood(date)"]
+    E["dateToColors(date)<br/>djb2 hash → xorshift32 PRNG<br/>→ 4 × hsl(rnd, 15–40%, 45–70%)"]
     F["blob-a/b/c/d<br/>backgroundColor<br/>↳ CSS transition 2.6s"]
     G["--blob-a/b/c<br/>CSS custom props<br/>↳ mood-banner inner echo"]
-    H["Background atmosphere shifts<br/>(slow, atmospheric)"]
+    H["Background atmosphere<br/>unique to this date"]
     I["Summary text zone<br/>has colour echo"]
 
     A --> B --> C --> D --> E
@@ -304,45 +306,37 @@ flowchart TD
     E --> G --> I
 ```
 
-### Three layers of visual atmosphere
+The algorithm in `app.js`:
 
-The mood doesn't just change the background. It operates on three nested layers:
+```js
+function dateToColors(dateStr) {
+  const rng = _makeRng(_hashDate(dateStr)); // xorshift32 seeded by djb2 hash
+  return Array.from({ length: 4 }, () => {
+    const hue = Math.floor(rng() * 360);      // full spectrum
+    const sat = Math.floor(15 + rng() * 25);  // 15–40% — editorial, not garish
+    const lit = Math.floor(45 + rng() * 25);  // 45–70% — visible through frosted glass
+    return `hsl(${hue}, ${sat}%, ${lit}%)`;
+  });
+}
+```
+
+Why deterministic-random rather than archetype-mapped? The source project assigns archetypes from a fixed list of 6 — but mapping 6 archetypes to 6 palettes means the background just repeats. Every day is its own day. The colour should be too.
+
+### Three layers of visual atmosphere
 
 | Layer | Mechanism | What you see |
 |-------|-----------|-------------|
 | **Blob background** | 4 `position: fixed` divs, `filter: blur(80px)`, JS RAF sine-wave motion | Large drifting colour fields behind the frosted card |
 | **CSS colour transition** | `transition: background-color 2.6s ease` on each blob div | Slow, atmospheric palette shift as you move between dates |
-| **Inner echo** | `.mood-banner::before` radial-gradient reading `--blob-a/b/c` CSS vars | The same colours concentrate softly behind the summary text inside the card |
+| **Inner echo** | `.mood-banner::before` radial-gradient reading `--blob-a/b/c` CSS vars | The same colours concentrate softly behind the summary text |
 
-The card itself uses `backdrop-filter: blur(32px)` — this is the key mechanism. The card has no solid background colour; it's frosted glass that transmits whatever colour is behind it. The blobs *are* the card's background.
+The card uses `backdrop-filter: blur(32px)` — frosted glass that transmits whatever colour is behind it. The blobs *are* the card's background.
 
-`@keyframes card-breathe` pulses the blur between `32px` and `22px` on an 8-second loop. When blur is lower, more blob colour bleeds through. When higher, the card looks more frosted. It gives the whole thing a slow respiratory quality — appropriate for something that's supposed to feel like a living archive.
-
-### Archetypes and palettes
-
-Each archetype maps to 4 blob colours. The design rules for the palettes:
-- **Max saturation ~45%** — keeps it editorial, not garish
-- **Hue families are meaningfully separated** — adjacent archetypes shouldn't look similar
-- **Warm/cool contrast within a palette** — internal emotional tension
-
-| Archetype | Hue family | Emotional register |
-|-----------|-----------|-------------------|
-| `gentle_tension` | warm stone + cool slate | Two forces pulling against each other |
-| `deep_sorrow` | deep blue-grey | Heavy, cold, still water |
-| `quiet_hope` | soft sage + pale gold | Growth without proclamation |
-| `restless_energy` | amber + terracotta | Heat, friction, movement |
-| `fragile_calm` | pale ice blue | Surface stillness, barely holding |
-| `collective_grief` | muted violet + slate | Shared weight, mourning |
-| `cautious_optimism` | warm sage + cream | Hope tempered by caution |
-| `cautious_hope` | same as above | API alias — treated identically |
-| `raw_uncertainty` | warm taupe + grey | Undefined, unresolved |
-
-> [!NOTE]
-> **Unknown archetype handling:** `setMood()` normalises the key (lowercase, spaces → underscores), logs a `console.warn`, and falls back to `gentle_tension`. If you see a `[mood] Unknown archetype` warning in the browser console, it means the Pi pipeline produced a new archetype not yet in the map. Add it to `MOODS` in `app.js` — see the palette design rules above for guidance.
+`@keyframes card-breathe` pulses the blur between `32px` and `22px` on an 8-second loop — when blur is lower, more colour bleeds through. Slow, respiratory.
 
 ### Blob animation
 
-Each of the four blobs drifts on an independent sine-wave path. They never sync up — the parameters (base position, amplitude, speed, phase) are deliberately different for each one:
+Each of the four blobs drifts on an independent sine-wave path, never syncing up:
 
 ```js
 const blobDefs = [
@@ -352,7 +346,7 @@ const blobDefs = [
 ];
 ```
 
-`bx/by` = base position (0–1 fraction of viewport), `ax/ay` = drift amplitude, `sx/sy` = speed, `ph` = phase offset. The result is four blobs that feel organic rather than mechanical — they'll never align perfectly, always shifting past each other.
+`bx/by` = base position (0–1 of viewport), `ax/ay` = drift amplitude, `sx/sy` = speed, `ph` = phase offset.
 
 ---
 
@@ -360,16 +354,16 @@ const blobDefs = [
 
 When audio plays, a canvas visualiser appears above the player.
 
-**Sausage / lens envelope shape.** Raw FFT data from the Web Audio API goes from loud (bass, index 0) to quiet (treble, last index). If you draw it left-to-right, you get a shape that's tall on the left and tapers to nothing on the right — ugly and unbalanced. Instead, we rearrange the bins into a palindrome:
+**Sausage / lens envelope shape.** Raw FFT data goes from loud (bass, index 0) to quiet (treble, last index). Drawn left-to-right that's tall-left, tapering-right — unbalanced. Instead, bins are rearranged into a palindrome:
 
 ```
 raw:     [bass ..... treble]
 sausage: [treble ... bass ... treble]
 ```
 
-Left half descends toward the centre (getting louder), right half mirrors it. The result is a symmetric lens shape that peaks in the middle — quiet at the edges, loud at the centre. Much more pleasing for ambient music, which tends to have strong bass and soft highs.
+Left half gets louder toward the centre, right half mirrors it. Symmetric lens that peaks in the middle — appropriate for ambient music with strong bass and soft highs.
 
-**Vertically centred bars.** Each bar is drawn from `(H - barH) / 2` — centred on the canvas midline, growing up and down equally. This keeps the visualiser looking balanced regardless of the audio amplitude.
+**Vertically centred bars.** Each bar is drawn from `(H - barH) / 2` — centred on the canvas midline, growing up and down equally.
 
 ---
 
@@ -470,9 +464,9 @@ Set these in the dashboard under **Environment**:
 
 The date is probably incomplete — the Pi uploaded the zip but not the wav, or vice versa. Only dates with both files are served. Check `/api/status` to see how many dates are loaded, and look at Render logs for any `Skipping incomplete date:` warnings during startup.
 
-### Background colours look the same across archetypes
+### Background looks the same for every date
 
-The MOODS map in `app.js` has an entry for this archetype that's too similar to adjacent ones, or the archetype returned by the API isn't in the map and it's falling back to `gentle_tension`. Open browser devtools and look for `[mood]` log lines — they'll tell you exactly what archetype was received and what colours were applied.
+The date-seeded colour system derives colours from the date string — if all dates look identical, check that `meta.date` is being passed correctly to `setMood()` in `renderMetadata()`. Open devtools: `dateToColors('2026-03-06')` and `dateToColors('2026-03-07')` should return visibly different sets.
 
 ### Server startup takes longer than expected
 

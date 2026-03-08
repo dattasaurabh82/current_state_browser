@@ -14,19 +14,59 @@ function pastTense(summary) {
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
-// ── Mood system ───────────────────────────────────────────────────────────────
+// ── Date-seeded colour system ─────────────────────────────────────────────────
+//
+// Each date gets 4 unique blob colours derived deterministically from the date
+// string itself. Same date → same colours, always. No predefined palette map,
+// no archetype lookup. Every day is its own atmosphere.
+//
+// Algorithm:
+//   1. Hash the date string (djb2-style) → 32-bit unsigned seed
+//   2. Feed seed into xorshift32 PRNG
+//   3. Pull 4 × (hue, saturation, lightness) from the PRNG
+//   4. Constrain to editorial range: sat 15–40%, lightness 45–70%
+//
+// Why these ranges?
+//   Saturation 15–40%: desaturated enough to feel editorial, varied enough to
+//   be perceptually distinct across days. Higher than ~45% starts to look like
+//   a consumer app rather than a journal.
+//   Lightness 45–70%: visible against the card's frosted glass, never too dark
+//   to transmit through the backdrop-filter, never washed out to near-white.
 
-const MOODS = {
-  gentle_tension:    ['#c4b5a5', '#8faab8', '#d4c4a8', '#7a9aaa'],
-  deep_sorrow:       ['#607080', '#506070', '#788898', '#506878'],
-  quiet_hope:        ['#a8bc90', '#c8c890', '#b8d0a0', '#d0c8a0'],
-  restless_energy:   ['#c8824a', '#b89060', '#d4a060', '#c07040'],
-  fragile_calm:      ['#a8c4d0', '#c0d4dc', '#b0ccd8', '#d0dce4'],
-  collective_grief:  ['#8878a8', '#787098', '#9888b0', '#706888'],
-  cautious_optimism: ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
-  cautious_hope:     ['#a0b890', '#c8c8a0', '#b8c8a8', '#d4c8b0'],
-  raw_uncertainty:   ['#b8a890', '#a89880', '#c4b8a0', '#b0a888'],
-};
+function _hashDate(dateStr) {
+  // djb2 hash: simple, well-distributed for short strings like YYYY-MM-DD
+  let h = 5381;
+  for (let i = 0; i < dateStr.length; i++) {
+    h = (Math.imul(h, 33) ^ dateStr.charCodeAt(i)) >>> 0;
+  }
+  return h === 0 ? 1 : h; // xorshift can't start at 0
+}
+
+function _makeRng(seed) {
+  // xorshift32 — fast, good distribution, reproducible
+  let s = seed;
+  return function () {
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    s = s >>> 0;
+    return s / 0xFFFFFFFF;
+  };
+}
+
+function dateToColors(dateStr) {
+  const rng = _makeRng(_hashDate(dateStr));
+  const colors = [];
+  for (let i = 0; i < 4; i++) {
+    const hue = Math.floor(rng() * 360);          // full spectrum
+    const sat = Math.floor(15 + rng() * 25);      // 15–40%
+    const lit = Math.floor(45 + rng() * 25);      // 45–70%
+    colors.push(`hsl(${hue}, ${sat}%, ${lit}%)`);
+  }
+  return colors;
+}
+
+// ── Apply colours to blobs ────────────────────────────────────────────────────
 
 const blobs = [
   document.getElementById('blob-a'),
@@ -35,19 +75,26 @@ const blobs = [
   document.getElementById('blob-d'),
 ];
 
-function setMood(archetype) {
-  const key = archetype ? archetype.toLowerCase().replace(/[\s-]+/g, '_') : 'gentle_tension';
-  const p   = MOODS[key] || MOODS['gentle_tension'];
-  if (!MOODS[key]) console.warn(`[mood] Unknown archetype "${archetype}", falling back to gentle_tension`);
-  console.log(`[mood] ${key}`, p);
-  blobs.forEach((b, i) => { if (b) b.style.backgroundColor = p[i]; });
+function setMood(dateStr) {
+  // Fallback: if no date yet, use a neutral slate
+  const colors = dateStr ? dateToColors(dateStr) : [
+    'hsl(210, 18%, 55%)',
+    'hsl(30,  16%, 60%)',
+    'hsl(180, 14%, 58%)',
+    'hsl(60,  12%, 62%)',
+  ];
+
+  blobs.forEach((b, i) => { if (b) b.style.backgroundColor = colors[i]; });
+
   const r = document.documentElement;
-  r.style.setProperty('--blob-a', p[0]);
-  r.style.setProperty('--blob-b', p[1]);
-  r.style.setProperty('--blob-c', p[2]);
+  r.style.setProperty('--blob-a', colors[0]);
+  r.style.setProperty('--blob-b', colors[1]);
+  r.style.setProperty('--blob-c', colors[2]);
 }
 
 // ── Blob animation ────────────────────────────────────────────────────────────
+// Each blob drifts on an independent sine-wave path.
+// Different speed, amplitude, phase per blob — never in sync.
 
 const blobDefs = [
   { bx: 0.18, by: 0.28, ax: 0.12, ay: 0.10, sx: 0.00031, sy: 0.00023, ph: 0.00 },
@@ -67,7 +114,9 @@ function animateBlobs(t) {
   requestAnimationFrame(animateBlobs);
 }
 requestAnimationFrame(animateBlobs);
-setMood('gentle_tension');
+
+// Neutral default until first date loads
+setMood(null);
 
 // ── Visualiser ────────────────────────────────────────────────────────────────
 
@@ -100,11 +149,9 @@ const Visualiser = (() => {
 
   function draw() {
     if (!analyser || !ctx) return;
-    const bufLen = analyser.frequencyBinCount;  // 128 bins (fftSize/2)
+    const bufLen = analyser.frequencyBinCount; // 128
     const raw    = new Uint8Array(bufLen);
     const W = canvas.width, H = canvas.height;
-
-    // We draw bufLen bars across the full width
     const gap  = 1.5;
     const barW = (W - bufLen * gap) / bufLen;
 
@@ -112,28 +159,20 @@ const Visualiser = (() => {
       animId = requestAnimationFrame(loop);
       analyser.getByteFrequencyData(raw);
 
-      // ── Sausage / lens envelope ───────────────────────────────
-      // Frequency data: index 0 = bass (loud), last = treble (quiet).
-      // We rearrange into a palindrome so the loud bass sits centre,
-      // quiet treble at both edges → low–high–low envelope shape.
-      //
-      // Arrangement: [raw[half]...raw[1], raw[0], raw[1]...raw[half]]
-      // Left half descends from mid-freq to bass (getting louder).
-      // Right half mirrors: bass back up to mid-freq (getting quieter).
-      // Result: a symmetric sausage/lens that peaks in the middle.
-
+      // Sausage/lens envelope: rearrange FFT bins into a palindrome so bass
+      // (loudest, index 0) sits in the centre and treble at both edges.
       const half = Math.floor(bufLen / 2);
       const sausage = new Uint8Array(bufLen);
       for (let i = 0; i <= half; i++) {
-        sausage[half - i] = raw[i];  // left side: count down toward centre
-        sausage[half + i] = raw[i];  // right side: mirror
+        sausage[half - i] = raw[i];
+        sausage[half + i] = raw[i];
       }
 
       ctx.clearRect(0, 0, W, H);
       for (let i = 0; i < bufLen; i++) {
         const barH = (sausage[i] / 255) * H * 0.90;
         const x    = i * (barW + gap);
-        const y    = (H - barH) / 2;          // centred vertically
+        const y    = (H - barH) / 2; // centred vertically
         ctx.fillStyle = 'rgba(26,26,24,0.50)';
         ctx.fillRect(x, y, barW, barH);
       }
@@ -260,7 +299,10 @@ function renderMetadata(meta) {
     meta.prompt_natural || '';
   document.getElementById('entry-themes').textContent =
     (meta.dominant_themes || []).join(', ');
-  setMood(meta.primary_archetype);
+
+  // Colour atmosphere is driven by the date, not the archetype name.
+  // Same date always produces the same 4 colours.
+  setMood(meta.date);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
