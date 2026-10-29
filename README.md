@@ -437,6 +437,9 @@ The service runs on [Render](https://render.com) in Frankfurt (EU Central).
 | Health Check Path | `/api/status` |
 | Auto-deploy | On commit to `main` |
 
+> [!TIP]
+> Auto-deploy only fires if the Render GitHub app has access to this repo. If a push shows up on GitHub but nothing starts in Render's Deploys tab, check [github.com/settings/installations](https://github.com/settings/installations), Render, Repository access, and add the repo there. Then re-link it once in Render under Settings, Source, Git Provider. The repo was in that state from March to October 2026 and every push went undeployed.
+
 ### Why Starter and not Free
 
 Render's free tier sleeps after ~15 minutes of inactivity. When it wakes, the cache has to reload. Even with the parallelised startup (~3–5s), that's a cold-start penalty for the first visitor. The Starter tier is always-on. For something that's supposed to feel like a quiet, available archive — not a service that needs warming up — always-on matters.
@@ -444,6 +447,16 @@ Render's free tier sleeps after ~15 minutes of inactivity. When it wakes, the ca
 ### Why `uv sync --frozen`
 
 Render's Python runtime auto-detects `pyproject.toml` and pre-installs `uv`. `uv sync --frozen` uses the lockfile exactly — reproducible builds, fast installs. `uv cache prune --ci` cleans the build cache to keep the deploy slug lean.
+
+The flip side of `--frozen`: nothing updates unless the lockfile changes, and that includes the CA bundle. `requests` trusts the certificates shipped inside the `certifi` package, not Render's system store, so a rebuild alone does not pick up a new bundle. When a CA is revoked (eMudhra, October 2026), the fix is a lockfile bump:
+
+```bash
+uv lock --upgrade-package certifi
+uv sync
+git add pyproject.toml uv.lock && git commit -m "Bump certifi" && git push
+```
+
+`pyproject.toml` carries a `certifi` floor so a future relock cannot drop below the patched release.
 
 ### Environment variables in Render
 
